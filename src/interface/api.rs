@@ -17,6 +17,7 @@ where
         .route("/items", post(set_item::<S>))
         .route("/items/{key}", get(get_item::<S>))
         .route("/items/{key}", delete(delete_item::<S>))
+        .route("/healthz", get(healthcheck))
         .with_state(storage)
 }
 
@@ -54,4 +55,8 @@ where
     } else {
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+async fn healthcheck() -> StatusCode {
+    StatusCode::ACCEPTED
 }
