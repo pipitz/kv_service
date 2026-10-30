@@ -1,19 +1,19 @@
-use std::collections::HashMap;
-use domain::Storage;
 use crate::domain;
-use std::sync::Arc;
 use async_trait::async_trait;
+use domain::Storage;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
-pub struct Cell{
-    memory: Arc<Mutex<HashMap<String,String>>>
+pub struct Cell {
+    memory: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl Cell {
     pub fn new() -> Self {
-        Cell{
-            memory: Arc::new(Mutex::new(HashMap::new()))
+        Cell {
+            memory: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -24,9 +24,14 @@ impl Storage for Cell {
         let mut cell = self.memory.lock().await;
         cell.insert(key, value);
     }
-    async fn get(&self, key: &String) -> Option<String> {
+    async fn get(&self, key: &str) -> Option<String> {
         let cell = self.memory.lock().await;
         cell.get(key).cloned()
+    }
+
+    async fn delete(&self, key: &str) -> Option<String> {
+        let mut cell = self.memory.lock().await;
+        cell.remove(key)
     }
 }
 
@@ -48,8 +53,20 @@ mod tests {
         assert_eq!(val, Some("ferris".to_string()));
 
         // 3. Verify overwriting works correctly
-        cell.set("username".to_string(), "rustacean".to_string()).await;
+        cell.set("username".to_string(), "rustacean".to_string())
+            .await;
         let updated_val = cell.get(&"username".to_string()).await;
         assert_eq!(updated_val, Some("rustacean".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let cell = Cell::new();
+
+        cell.set("username".to_string(), "ferris".to_string()).await;
+        let delete_result = cell.delete(&"username".to_string()).await;
+        assert_eq!(delete_result, Some("ferris".to_string()));
+        let delete_result = cell.delete(&"username".to_string()).await;
+        assert_eq!(delete_result, None);
     }
 }

@@ -1,27 +1,26 @@
-use axum::{
-    extract::{Path, State},
-    routing::{get, post},
-    http::StatusCode,
-    Json, Router,
-};
-use dto::ItemPayload;
-use domain::Storage;
 use crate::domain;
 use crate::interface::dto;
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    http::StatusCode,
+    routing::{delete, get, post},
+};
+use domain::Storage;
+use dto::ItemPayload;
 
 pub fn get_router<S>(storage: S) -> Router
 where
-    S: Storage + Clone + Send + Sync + 'static, {
+    S: Storage + Clone + Send + Sync + 'static,
+{
     Router::new()
         .route("/items", post(set_item::<S>))
         .route("/items/{key}", get(get_item::<S>))
+        .route("/items/{key}", delete(delete_item::<S>))
         .with_state(storage)
 }
 
-async fn set_item<S>(
-    State(storage): State<S>,
-    Json(payload): Json<ItemPayload>,
-) -> StatusCode
+async fn set_item<S>(State(storage): State<S>, Json(payload): Json<ItemPayload>) -> StatusCode
 where
     S: Storage,
 {
@@ -38,6 +37,20 @@ where
 {
     if let Some(value) = storage.get(&key).await {
         Ok(Json(value))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+async fn delete_item<S>(
+    State(storage): State<S>,
+    Path(key): Path<String>,
+) -> Result<StatusCode, StatusCode>
+where
+    S: Storage,
+{
+    if storage.delete(&key).await.is_some() {
+        Ok(StatusCode::ACCEPTED)
     } else {
         Err(StatusCode::NOT_FOUND)
     }
