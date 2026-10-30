@@ -1,52 +1,72 @@
+use crate::domain;
+use async_trait::async_trait;
+use domain::Storage;
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-pub struct Cell<T, U> {
-    memory: HashMap<T,U>
+#[derive(Debug, Clone)]
+pub struct Cell {
+    memory: Arc<Mutex<HashMap<String, String>>>,
 }
 
-pub trait Storage<T, U>{
-    fn set(&mut self, key: T, value: U);
-    fn get(&self, key: T) -> Option<&U>;
-}
-
-impl<T, U> Cell<T, U> {
+impl Cell {
     pub fn new() -> Self {
-        Cell{
-            memory: HashMap::new()
+        Cell {
+            memory: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
-impl<T: Eq + Hash, U> Storage<T, U> for Cell<T, U> {
-    fn set(&mut self, key: T, value: U) {
-        self.memory.insert(key,value);
+#[async_trait]
+impl Storage for Cell {
+    async fn set(&self, key: String, value: String) {
+        let mut cell = self.memory.lock().await;
+        cell.insert(key, value);
+    }
+    async fn get(&self, key: &str) -> Option<String> {
+        let cell = self.memory.lock().await;
+        cell.get(key).cloned()
     }
 
-    fn get(&self, key: T) -> Option<&U> {
-        self.memory.get(&key)
+    async fn delete(&self, key: &str) -> Option<String> {
+        let mut cell = self.memory.lock().await;
+        cell.remove(key)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    // Bring everything from the outer scope into the test module
     use super::*;
 
-    #[test]
-    fn test_store_and_retrieve() {
-        let mut cell = Cell::new();
-        cell.set("username", "alice");
+    #[tokio::test]
+    async fn test_set_and_get() {
+        let cell = Cell::new();
 
-        // Assert that we can retrieve the value we stored
-        assert_eq!(cell.get(&"username"), Some(&"alice"));
+        // 1. Verify a missing key returns None
+        let missing = cell.get(&"missing_key".to_string()).await;
+        assert_eq!(missing, None);
+
+        // 2. Set a key-value pair and verify it can be retrieved
+        cell.set("username".to_string(), "ferris".to_string()).await;
+        let val = cell.get(&"username".to_string()).await;
+        assert_eq!(val, Some("ferris".to_string()));
+
+        // 3. Verify overwriting works correctly
+        cell.set("username".to_string(), "rustacean".to_string())
+            .await;
+        let updated_val = cell.get(&"username".to_string()).await;
+        assert_eq!(updated_val, Some("rustacean".to_string()));
     }
 
-    #[test]
-    fn test_retrieve_nonexistent() {
-        let cell: Cell<String, i32> = Cell::new();
+    #[tokio::test]
+    async fn test_delete() {
+        let cell = Cell::new();
 
-        // Asserting that a missing key returns None
-        assert_eq!(cell.get(String::from("missing")), None);
+        cell.set("username".to_string(), "ferris".to_string()).await;
+        let delete_result = cell.delete(&"username".to_string()).await;
+        assert_eq!(delete_result, Some("ferris".to_string()));
+        let delete_result = cell.delete(&"username".to_string()).await;
+        assert_eq!(delete_result, None);
     }
 }
